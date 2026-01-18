@@ -687,6 +687,67 @@ print(f"Backup created: {backup_path}")
 
 ---
 
+## Step 7: Streamlit Cloud Deployment
+
+### 7.1 Configure Streamlit Secrets
+
+1. Deploy your app to [Streamlit Cloud](https://share.streamlit.io)
+2. Go to your app's **Settings** (gear icon in bottom right, or "Manage app")
+3. Click **Secrets** in the left sidebar
+4. Add your connection string in **TOML format**:
+
+```toml
+AZURE_STORAGE_CONNECTION_STRING = 'DefaultEndpointsProtocol=https;AccountName=yourproject;AccountKey=YOUR_KEY_HERE;EndpointSuffix=core.windows.net'
+```
+
+**Important:** Use single quotes `'...'` to avoid TOML parsing issues with the `==` in the AccountKey.
+
+5. Click **Save**
+6. Reboot the app
+
+### 7.2 Verify Secrets Are Loaded
+
+Add this debug code temporarily to check secrets are working:
+
+```python
+import streamlit as st
+
+st.write("Secrets check:")
+if 'AZURE_STORAGE_CONNECTION_STRING' in st.secrets:
+    st.success("Connection string found!")
+else:
+    st.error("Connection string NOT found")
+    st.write(f"Available secrets: {list(st.secrets.keys())}")
+```
+
+### 7.3 Create secrets.toml.example
+
+Create `.streamlit/secrets.toml.example` for documentation:
+
+```toml
+# Streamlit Cloud Secrets Template
+# Copy this to secrets.toml for local testing
+# On Streamlit Cloud: Settings > Secrets
+
+AZURE_STORAGE_CONNECTION_STRING = 'DefaultEndpointsProtocol=https;AccountName=YOUR_ACCOUNT;AccountKey=YOUR_KEY;EndpointSuffix=core.windows.net'
+```
+
+### 7.4 Update .gitignore
+
+```gitignore
+# Streamlit secrets (NEVER COMMIT)
+.streamlit/secrets.toml
+```
+
+### 7.5 Headless Environment Detection
+
+The `blob_storage.py` module automatically detects Streamlit Cloud and skips interactive browser authentication. It checks for:
+- `/mount/src` directory (Streamlit Cloud runs from here)
+- `CI` or `GITHUB_ACTIONS` environment variables
+- `STREAMLIT_SERVER_HEADLESS` environment variable
+
+---
+
 ## Troubleshooting
 
 | Error | Solution |
@@ -696,6 +757,9 @@ print(f"Backup created: {backup_path}")
 | `Container not found` | Create container in Azure Portal |
 | `Upload timeout` | Large file - increase `timeout` parameter |
 | `Parquet type error` | Data has mixed types - `_clean_dataframe_for_parquet()` handles this |
+| `Invalid TOML format` (Streamlit) | Use single quotes around connection string |
+| `InteractiveBrowserCredential failed` | Not on Streamlit Cloud - add connection string to secrets |
+| `No data found` on Streamlit Cloud | Check secrets are configured correctly (Settings > Secrets) |
 
 ---
 
