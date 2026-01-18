@@ -283,10 +283,13 @@ def generate_athlete_report(df, athlete_name: str) -> str:
 
 
 def main():
+    # Get script directory for asset paths (works on Streamlit Cloud)
+    script_dir = Path(__file__).parent.resolve()
+
     # Header with logo
     col_logo, col_title = st.columns([1, 5])
     with col_logo:
-        logo_path = Path("Saudilogo.png")
+        logo_path = script_dir / "Saudilogo.png"
         if logo_path.exists():
             st.image(str(logo_path), width=100)
     with col_title:
