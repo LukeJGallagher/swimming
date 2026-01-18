@@ -127,6 +127,198 @@ def get_world_records(course_type: str = 'lcm') -> dict:
     return WORLD_RECORDS_LCM
 
 
+# =============================================================================
+# OFFICIAL ENTRY STANDARDS (Times in seconds)
+# =============================================================================
+
+# LA 2028 Olympic Qualifying Times (OQT) - Estimated based on Tokyo 2020 + Paris 2024
+# Note: Official times will be published by World Aquatics closer to 2028
+LA_2028_OQT = {
+    # Men
+    'Men 50m Freestyle': 21.96,
+    'Men 100m Freestyle': 48.00,
+    'Men 200m Freestyle': 106.52,
+    'Men 400m Freestyle': 227.18,
+    'Men 800m Freestyle': 468.49,
+    'Men 1500m Freestyle': 904.66,
+    'Men 100m Backstroke': 53.85,
+    'Men 200m Backstroke': 117.24,
+    'Men 100m Breaststroke': 59.67,
+    'Men 200m Breaststroke': 130.79,
+    'Men 100m Butterfly': 51.67,
+    'Men 200m Butterfly': 115.06,
+    'Men 200m Individual Medley': 118.87,
+    'Men 400m Individual Medley': 254.26,
+    # Women
+    'Women 50m Freestyle': 24.77,
+    'Women 100m Freestyle': 53.68,
+    'Women 200m Freestyle': 117.50,
+    'Women 400m Freestyle': 245.56,
+    'Women 800m Freestyle': 511.99,
+    'Women 1500m Freestyle': 983.20,
+    'Women 100m Backstroke': 60.00,
+    'Women 200m Backstroke': 129.23,
+    'Women 100m Breaststroke': 67.26,
+    'Women 200m Breaststroke': 145.31,
+    'Women 100m Butterfly': 57.92,
+    'Women 200m Butterfly': 127.88,
+    'Women 200m Individual Medley': 131.80,
+    'Women 400m Individual Medley': 280.87,
+}
+
+# World Championships Entry Standards (Budapest 2027 - Estimated)
+WORLD_CHAMPS_2027_ENTRY = {
+    # Men - "A" Standards
+    'Men 50m Freestyle': 22.31,
+    'Men 100m Freestyle': 48.83,
+    'Men 200m Freestyle': 108.43,
+    'Men 400m Freestyle': 232.00,
+    'Men 800m Freestyle': 480.00,
+    'Men 1500m Freestyle': 925.00,
+    'Men 50m Backstroke': 25.20,
+    'Men 100m Backstroke': 54.80,
+    'Men 200m Backstroke': 119.50,
+    'Men 50m Breaststroke': 27.50,
+    'Men 100m Breaststroke': 60.60,
+    'Men 200m Breaststroke': 133.00,
+    'Men 50m Butterfly': 23.60,
+    'Men 100m Butterfly': 52.50,
+    'Men 200m Butterfly': 117.00,
+    'Men 200m Individual Medley': 121.00,
+    'Men 400m Individual Medley': 259.00,
+    # Women - "A" Standards
+    'Women 50m Freestyle': 25.10,
+    'Women 100m Freestyle': 54.50,
+    'Women 200m Freestyle': 119.50,
+    'Women 400m Freestyle': 250.00,
+    'Women 800m Freestyle': 522.00,
+    'Women 1500m Freestyle': 1000.00,
+    'Women 50m Backstroke': 28.50,
+    'Women 100m Backstroke': 61.00,
+    'Women 200m Backstroke': 131.50,
+    'Women 50m Breaststroke': 31.00,
+    'Women 100m Breaststroke': 68.00,
+    'Women 200m Breaststroke': 148.00,
+    'Women 50m Butterfly': 26.00,
+    'Women 100m Butterfly': 58.80,
+    'Women 200m Butterfly': 130.00,
+    'Women 200m Individual Medley': 134.00,
+    'Women 400m Individual Medley': 286.00,
+}
+
+# Asian Games 2026 (Nagoya) Entry Standards - Estimated
+# Based on 2023 Asian Games Hangzhou medal times
+ASIAN_GAMES_2026_ENTRY = {
+    # Men - Gold medal pace (approximate)
+    'Men 50m Freestyle': 22.00,
+    'Men 100m Freestyle': 48.50,
+    'Men 200m Freestyle': 107.00,
+    'Men 400m Freestyle': 229.00,
+    'Men 800m Freestyle': 475.00,
+    'Men 1500m Freestyle': 915.00,
+    'Men 50m Backstroke': 25.00,
+    'Men 100m Backstroke': 54.00,
+    'Men 200m Backstroke': 117.50,
+    'Men 50m Breaststroke': 27.20,
+    'Men 100m Breaststroke': 60.00,
+    'Men 200m Breaststroke': 130.00,
+    'Men 50m Butterfly': 23.40,
+    'Men 100m Butterfly': 52.00,
+    'Men 200m Butterfly': 115.50,
+    'Men 200m Individual Medley': 119.00,
+    'Men 400m Individual Medley': 255.00,
+    # Women - Gold medal pace (approximate)
+    'Women 50m Freestyle': 24.80,
+    'Women 100m Freestyle': 54.00,
+    'Women 200m Freestyle': 118.00,
+    'Women 400m Freestyle': 248.00,
+    'Women 800m Freestyle': 515.00,
+    'Women 1500m Freestyle': 985.00,
+    'Women 50m Backstroke': 28.00,
+    'Women 100m Backstroke': 60.50,
+    'Women 200m Backstroke': 129.00,
+    'Women 50m Breaststroke': 30.80,
+    'Women 100m Breaststroke': 67.50,
+    'Women 200m Breaststroke': 146.00,
+    'Women 50m Butterfly': 25.80,
+    'Women 100m Butterfly': 58.50,
+    'Women 200m Butterfly': 128.50,
+    'Women 200m Individual Medley': 132.00,
+    'Women 400m Individual Medley': 282.00,
+}
+
+# Asian Games Medal Pace (Bronze threshold - what you need to be in contention)
+ASIAN_GAMES_2026_MEDAL = {
+    # Men - Bronze medal pace
+    'Men 50m Freestyle': 22.40,
+    'Men 100m Freestyle': 49.20,
+    'Men 200m Freestyle': 109.00,
+    'Men 400m Freestyle': 233.00,
+    'Men 800m Freestyle': 485.00,
+    'Men 1500m Freestyle': 935.00,
+    'Men 50m Backstroke': 25.50,
+    'Men 100m Backstroke': 55.20,
+    'Men 200m Backstroke': 120.00,
+    'Men 50m Breaststroke': 27.80,
+    'Men 100m Breaststroke': 61.50,
+    'Men 200m Breaststroke': 133.00,
+    'Men 50m Butterfly': 24.00,
+    'Men 100m Butterfly': 53.20,
+    'Men 200m Butterfly': 118.00,
+    'Men 200m Individual Medley': 122.00,
+    'Men 400m Individual Medley': 260.00,
+    # Women - Bronze medal pace
+    'Women 50m Freestyle': 25.30,
+    'Women 100m Freestyle': 55.00,
+    'Women 200m Freestyle': 120.00,
+    'Women 400m Freestyle': 252.00,
+    'Women 800m Freestyle': 525.00,
+    'Women 1500m Freestyle': 1005.00,
+    'Women 50m Backstroke': 28.60,
+    'Women 100m Backstroke': 61.80,
+    'Women 200m Backstroke': 132.00,
+    'Women 50m Breaststroke': 31.50,
+    'Women 100m Breaststroke': 69.00,
+    'Women 200m Breaststroke': 150.00,
+    'Women 50m Butterfly': 26.50,
+    'Women 100m Butterfly': 59.80,
+    'Women 200m Butterfly': 131.50,
+    'Women 200m Individual Medley': 135.00,
+    'Women 400m Individual Medley': 290.00,
+}
+
+
+def get_entry_standards(competition: str = 'olympics') -> dict:
+    """Get entry standards for a competition.
+
+    Args:
+        competition: 'olympics', 'worlds', 'asian_games_gold', 'asian_games_medal'
+
+    Returns:
+        Dictionary of entry standards in seconds
+    """
+    standards = {
+        'olympics': LA_2028_OQT,
+        'worlds': WORLD_CHAMPS_2027_ENTRY,
+        'asian_games_gold': ASIAN_GAMES_2026_ENTRY,
+        'asian_games_medal': ASIAN_GAMES_2026_MEDAL,
+    }
+    return standards.get(competition.lower(), LA_2028_OQT)
+
+
+def format_time(seconds: float) -> str:
+    """Format seconds to MM:SS.ss or SS.ss time string."""
+    if seconds is None or seconds <= 0:
+        return "N/A"
+    if seconds >= 60:
+        mins = int(seconds // 60)
+        secs = seconds % 60
+        return f"{mins}:{secs:05.2f}"
+    return f"{secs:.2f}"
+
+
+# =============================================================================
+
 # Peak performance ages from research
 PEAK_PERFORMANCE_AGES = {
     'male': {

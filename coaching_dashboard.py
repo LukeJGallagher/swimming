@@ -43,6 +43,8 @@ from coaching_analytics import (
     AdvancedKPIAnalyzer,
     load_all_results,
     get_world_records,
+    get_entry_standards,
+    format_time,
     WORLD_RECORDS_LCM,
     WORLD_RECORDS_SCM,
     PEAK_PERFORMANCE_AGES,
@@ -50,6 +52,10 @@ from coaching_analytics import (
     COMPETITION_BENCHMARKS,
     AGE_PROGRESSION_BENCHMARKS,
     IMPROVEMENT_EXPECTATIONS,
+    LA_2028_OQT,
+    WORLD_CHAMPS_2027_ENTRY,
+    ASIAN_GAMES_2026_ENTRY,
+    ASIAN_GAMES_2026_MEDAL,
 )
 from enhanced_swimming_scraper import SplitTimeAnalyzer
 
@@ -778,114 +784,306 @@ def show_road_to_nagoya(df, course_type='all'):
                         st.dataframe(top_performers, use_container_width=True, hide_index=True)
 
     with tab3:
-        st.subheader("Qualification Standards")
+        st.subheader("Official Entry Standards Comparison")
 
         st.markdown("""
         <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px; border-left: 4px solid #007167;">
-            <strong>Note:</strong> Official qualification standards for Nagoya 2026 will be published by the
-            Olympic Council of Asia. The times below are estimated based on historical Asian Games standards.
+            <strong>What It Takes to Compete:</strong> Compare entry standards across major competitions.
+            Times are based on historical data and estimated qualification standards.
         </div>
         """, unsafe_allow_html=True)
 
         st.markdown("---")
 
-        # Estimated QT based on 2022 Hangzhou Asian Games
-        qualification_times = {
-            'Men': {
-                '50m Freestyle': '22.50',
-                '100m Freestyle': '49.50',
-                '200m Freestyle': '1:49.00',
-                '400m Freestyle': '3:52.00',
-                '800m Freestyle': '8:05.00',
-                '1500m Freestyle': '15:30.00',
-                '100m Backstroke': '55.50',
-                '200m Backstroke': '2:02.00',
-                '100m Breaststroke': '1:01.50',
-                '200m Breaststroke': '2:15.00',
-                '100m Butterfly': '53.00',
-                '200m Butterfly': '1:59.00',
-                '200m Individual Medley': '2:03.00',
-                '400m Individual Medley': '4:22.00',
-            },
-            'Women': {
-                '50m Freestyle': '25.50',
-                '100m Freestyle': '55.50',
-                '200m Freestyle': '2:00.00',
-                '400m Freestyle': '4:15.00',
-                '800m Freestyle': '8:40.00',
-                '1500m Freestyle': '16:40.00',
-                '100m Backstroke': '1:02.00',
-                '200m Backstroke': '2:15.00',
-                '100m Breaststroke': '1:10.00',
-                '200m Breaststroke': '2:30.00',
-                '100m Butterfly': '59.50',
-                '200m Butterfly': '2:12.00',
-                '200m Individual Medley': '2:16.00',
-                '400m Individual Medley': '4:48.00',
-            }
-        }
+        # Gender and event selection
+        col_gender, col_event = st.columns(2)
 
-        col1, col2 = st.columns(2)
+        with col_gender:
+            qual_gender = st.selectbox("Gender", ["Men", "Women"], key="qual_gender")
 
-        with col1:
-            st.markdown("**Men's Events (Estimated QT)**")
-            men_df = pd.DataFrame(list(qualification_times['Men'].items()), columns=['Event', 'Qualification Time'])
-            st.dataframe(men_df, use_container_width=True, hide_index=True)
+        # Get events for selected gender
+        gender_events = [e.replace(f"{qual_gender} ", "") for e in ASIAN_GAMES_2026_ENTRY.keys() if e.startswith(qual_gender)]
 
-        with col2:
-            st.markdown("**Women's Events (Estimated QT)**")
-            women_df = pd.DataFrame(list(qualification_times['Women'].items()), columns=['Event', 'Qualification Time'])
-            st.dataframe(women_df, use_container_width=True, hide_index=True)
+        with col_event:
+            qual_event = st.selectbox("Select Event", sorted(gender_events), key="qual_event")
+
+        event_key = f"{qual_gender} {qual_event}"
+
+        # Get standards for this event
+        asian_gold = ASIAN_GAMES_2026_ENTRY.get(event_key)
+        asian_medal = ASIAN_GAMES_2026_MEDAL.get(event_key)
+        worlds_entry = WORLD_CHAMPS_2027_ENTRY.get(event_key)
+        olympic_oqt = LA_2028_OQT.get(event_key)
+        world_record = WORLD_RECORDS_LCM.get(event_key)
+
+        if asian_gold:
+            st.markdown(f"### {event_key}")
+
+            # Display standards comparison
+            st.markdown("#### Entry Standards Comparison")
+
+            standards_data = []
+            if world_record:
+                standards_data.append({
+                    'Level': '🌍 World Record',
+                    'Time': format_time(world_record),
+                    'Seconds': world_record,
+                    'Description': 'Current world best'
+                })
+            if olympic_oqt:
+                standards_data.append({
+                    'Level': '🏅 LA 2028 Olympic OQT',
+                    'Time': format_time(olympic_oqt),
+                    'Seconds': olympic_oqt,
+                    'Description': 'Olympic Qualifying Time'
+                })
+            if worlds_entry:
+                standards_data.append({
+                    'Level': '🌐 World Champs 2027 Entry',
+                    'Time': format_time(worlds_entry),
+                    'Seconds': worlds_entry,
+                    'Description': '"A" Standard entry'
+                })
+            if asian_gold:
+                standards_data.append({
+                    'Level': '🥇 Nagoya 2026 Gold Pace',
+                    'Time': format_time(asian_gold),
+                    'Seconds': asian_gold,
+                    'Description': 'Expected gold medal time'
+                })
+            if asian_medal:
+                standards_data.append({
+                    'Level': '🥉 Nagoya 2026 Medal Pace',
+                    'Time': format_time(asian_medal),
+                    'Seconds': asian_medal,
+                    'Description': 'Bronze medal contention'
+                })
+
+            # Display as colored cards
+            cols = st.columns(len(standards_data))
+            colors = ['#FFD700', '#007167', '#0077B6', '#007167', '#CD7F32']
+
+            for i, (col, std) in enumerate(zip(cols, standards_data)):
+                with col:
+                    color = colors[i % len(colors)]
+                    st.markdown(f"""
+                    <div style="background: {color}; padding: 1rem; border-radius: 8px; text-align: center; color: white; height: 120px;">
+                        <p style="margin: 0; font-size: 0.75rem; opacity: 0.9;">{std['Level']}</p>
+                        <p style="margin: 0.5rem 0; font-size: 1.5rem; font-weight: bold;">{std['Time']}</p>
+                        <p style="margin: 0; font-size: 0.7rem; opacity: 0.8;">{std['Description']}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+            # Gap analysis chart
+            st.markdown("---")
+            st.markdown("#### Standards Ladder")
+
+            fig = go.Figure()
+
+            # Add horizontal bar for each standard
+            for i, std in enumerate(reversed(standards_data)):
+                fig.add_trace(go.Bar(
+                    y=[std['Level']],
+                    x=[std['Seconds']],
+                    orientation='h',
+                    marker_color=colors[len(standards_data) - 1 - i],
+                    text=std['Time'],
+                    textposition='outside',
+                    name=std['Level']
+                ))
+
+            fig.update_layout(
+                title=f"Time Standards for {event_key}",
+                xaxis_title="Time (seconds)",
+                yaxis_title="",
+                showlegend=False,
+                height=300,
+                **create_team_saudi_chart_theme()
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+            # Full comparison table
+            st.markdown("#### Full Standards Table")
+
+            # Build comparison for all events
+            all_events_data = []
+            for event in sorted(gender_events):
+                full_event = f"{qual_gender} {event}"
+                row = {
+                    'Event': event,
+                    'WR': format_time(WORLD_RECORDS_LCM.get(full_event)),
+                    'Olympic OQT': format_time(LA_2028_OQT.get(full_event)),
+                    'Worlds Entry': format_time(WORLD_CHAMPS_2027_ENTRY.get(full_event)),
+                    'Asian Gold': format_time(ASIAN_GAMES_2026_ENTRY.get(full_event)),
+                    'Asian Medal': format_time(ASIAN_GAMES_2026_MEDAL.get(full_event)),
+                }
+                all_events_data.append(row)
+
+            all_events_df = pd.DataFrame(all_events_data)
+            st.dataframe(all_events_df, use_container_width=True, hide_index=True)
+
+        else:
+            st.warning(f"No standards available for {event_key}")
 
     with tab4:
-        st.subheader("Target Time Calculator")
+        st.subheader("Target Times & Gap Analysis")
 
         st.markdown("""
-        Calculate target times for Nagoya 2026 based on current personal bests and improvement goals.
+        Analyze an athlete's current times vs. entry standards for major competitions.
         """)
 
-        col1, col2 = st.columns(2)
+        # Athlete selection
+        all_athletes = sorted(df['FullName'].dropna().unique())
+        target_athlete = st.selectbox("Select Athlete", all_athletes, key="target_athlete_nagoya")
 
-        with col1:
-            current_time = st.text_input("Current Personal Best (MM:SS.ss or SS.ss)", "1:00.00")
-            improvement_pct = st.slider("Target Improvement (%)", 0.5, 5.0, 2.0, 0.5)
+        if target_athlete:
+            athlete_data = df[df['FullName'].str.contains(target_athlete, case=False, na=False)].copy()
 
-        with col2:
-            # Calculate target
-            try:
-                if ':' in current_time:
-                    parts = current_time.split(':')
-                    current_seconds = float(parts[0]) * 60 + float(parts[1])
+            if not athlete_data.empty:
+                # Get unique events for this athlete
+                athlete_events = athlete_data['discipline_name'].dropna().unique()
+
+                st.markdown(f"### Gap Analysis for {target_athlete}")
+                st.markdown("How close is this athlete to qualifying for each competition?")
+
+                gap_data = []
+                for event in athlete_events:
+                    event_data = athlete_data[athlete_data['discipline_name'] == event]
+
+                    # Get best time
+                    def time_to_sec(t):
+                        if pd.isna(t): return float('inf')
+                        t = str(t)
+                        if ':' in t:
+                            parts = t.split(':')
+                            return float(parts[0]) * 60 + float(parts[1])
+                        try:
+                            return float(t)
+                        except:
+                            return float('inf')
+
+                    event_data = event_data.copy()
+                    event_data['time_sec'] = event_data['Time'].apply(time_to_sec)
+                    best_time = event_data['time_sec'].min()
+
+                    if best_time < float('inf'):
+                        # Find matching standards
+                        # Try to match event name to standards
+                        matched_event = None
+                        for std_event in ASIAN_GAMES_2026_ENTRY.keys():
+                            if event.lower() in std_event.lower() or std_event.lower() in event.lower():
+                                matched_event = std_event
+                                break
+
+                        if matched_event:
+                            asian_gold = ASIAN_GAMES_2026_ENTRY.get(matched_event)
+                            asian_medal = ASIAN_GAMES_2026_MEDAL.get(matched_event)
+                            worlds_entry = WORLD_CHAMPS_2027_ENTRY.get(matched_event)
+                            olympic_oqt = LA_2028_OQT.get(matched_event)
+
+                            gap_data.append({
+                                'Event': event,
+                                'PB': format_time(best_time),
+                                'PB_sec': best_time,
+                                'Asian Gold': format_time(asian_gold) if asian_gold else 'N/A',
+                                'Gap to Gold': f"+{best_time - asian_gold:.2f}s" if asian_gold and best_time > asian_gold else ("✓ QUALIFIED" if asian_gold else 'N/A'),
+                                'Asian Medal': format_time(asian_medal) if asian_medal else 'N/A',
+                                'Gap to Medal': f"+{best_time - asian_medal:.2f}s" if asian_medal and best_time > asian_medal else ("✓ QUALIFIED" if asian_medal else 'N/A'),
+                                'Olympic OQT': format_time(olympic_oqt) if olympic_oqt else 'N/A',
+                                'Gap to OQT': f"+{best_time - olympic_oqt:.2f}s" if olympic_oqt and best_time > olympic_oqt else ("✓ QUALIFIED" if olympic_oqt else 'N/A'),
+                            })
+
+                if gap_data:
+                    gap_df = pd.DataFrame(gap_data)
+                    st.dataframe(gap_df, use_container_width=True, hide_index=True)
+
+                    # Visual gap chart for best event
+                    st.markdown("---")
+                    st.markdown("#### Improvement Roadmap")
+
+                    # Select event for detailed chart
+                    chart_events = [g['Event'] for g in gap_data]
+                    selected_chart_event = st.selectbox("Select Event for Roadmap", chart_events, key="roadmap_event")
+
+                    selected_gap = next((g for g in gap_data if g['Event'] == selected_chart_event), None)
+
+                    if selected_gap:
+                        pb_sec = selected_gap['PB_sec']
+
+                        # Find the matching standards
+                        matched_std = None
+                        for std_event in ASIAN_GAMES_2026_ENTRY.keys():
+                            if selected_chart_event.lower() in std_event.lower() or std_event.lower() in selected_chart_event.lower():
+                                matched_std = std_event
+                                break
+
+                        if matched_std:
+                            fig = go.Figure()
+
+                            targets = []
+                            if ASIAN_GAMES_2026_MEDAL.get(matched_std):
+                                targets.append(('Asian Medal', ASIAN_GAMES_2026_MEDAL[matched_std], '#CD7F32'))
+                            if ASIAN_GAMES_2026_ENTRY.get(matched_std):
+                                targets.append(('Asian Gold', ASIAN_GAMES_2026_ENTRY[matched_std], '#FFD700'))
+                            if WORLD_CHAMPS_2027_ENTRY.get(matched_std):
+                                targets.append(('Worlds Entry', WORLD_CHAMPS_2027_ENTRY[matched_std], '#0077B6'))
+                            if LA_2028_OQT.get(matched_std):
+                                targets.append(('Olympic OQT', LA_2028_OQT[matched_std], '#007167'))
+
+                            # Current PB
+                            fig.add_trace(go.Bar(
+                                y=['Current PB'],
+                                x=[pb_sec],
+                                orientation='h',
+                                marker_color='#dc3545',
+                                text=format_time(pb_sec),
+                                textposition='outside',
+                                name='Current PB'
+                            ))
+
+                            # Target lines
+                            for name, time_sec, color in targets:
+                                fig.add_trace(go.Bar(
+                                    y=[name],
+                                    x=[time_sec],
+                                    orientation='h',
+                                    marker_color=color,
+                                    text=format_time(time_sec),
+                                    textposition='outside',
+                                    name=name
+                                ))
+
+                            fig.update_layout(
+                                title=f"Improvement Roadmap: {selected_chart_event}",
+                                xaxis_title="Time (seconds)",
+                                showlegend=False,
+                                height=250,
+                                **create_team_saudi_chart_theme()
+                            )
+                            st.plotly_chart(fig, use_container_width=True)
+
+                            # Improvement needed summary
+                            st.markdown("#### Time to Drop")
+                            cols = st.columns(len(targets))
+                            for i, (name, time_sec, color) in enumerate(targets):
+                                gap = pb_sec - time_sec
+                                with cols[i]:
+                                    if gap > 0:
+                                        st.markdown(f"""
+                                        <div style="background: {color}; padding: 0.8rem; border-radius: 8px; text-align: center; color: white;">
+                                            <p style="margin: 0; font-size: 0.8rem;">{name}</p>
+                                            <p style="margin: 0.3rem 0; font-size: 1.3rem; font-weight: bold;">-{gap:.2f}s</p>
+                                        </div>
+                                        """, unsafe_allow_html=True)
+                                    else:
+                                        st.markdown(f"""
+                                        <div style="background: #28a745; padding: 0.8rem; border-radius: 8px; text-align: center; color: white;">
+                                            <p style="margin: 0; font-size: 0.8rem;">{name}</p>
+                                            <p style="margin: 0.3rem 0; font-size: 1.3rem; font-weight: bold;">✓ QUALIFIED</p>
+                                        </div>
+                                        """, unsafe_allow_html=True)
                 else:
-                    current_seconds = float(current_time)
-
-                target_seconds = current_seconds * (1 - improvement_pct / 100)
-
-                # Format target time
-                if target_seconds >= 60:
-                    mins = int(target_seconds // 60)
-                    secs = target_seconds % 60
-                    target_str = f"{mins}:{secs:05.2f}"
-                else:
-                    target_str = f"{target_seconds:.2f}"
-
-                improvement_time = current_seconds - target_seconds
-
-                st.markdown(f"""
-                <div style="background: linear-gradient(135deg, {TEAM_SAUDI_COLORS['primary_teal']} 0%, {TEAM_SAUDI_COLORS['dark_teal']} 100%);
-                            padding: 1.5rem; border-radius: 10px; color: white; text-align: center;">
-                    <p style="margin: 0; font-size: 0.9rem;">TARGET TIME FOR NAGOYA 2026</p>
-                    <p style="margin: 0.5rem 0; font-size: 2.5rem; font-weight: bold; color: {TEAM_SAUDI_COLORS['gold_accent']};">
-                        {target_str}
-                    </p>
-                    <p style="margin: 0; font-size: 0.9rem;">
-                        Improvement needed: {improvement_time:.2f}s ({improvement_pct}%)
-                    </p>
-                </div>
-                """, unsafe_allow_html=True)
-
-            except:
-                st.warning("Enter a valid time format (e.g., 1:00.00 or 55.50)")
+                    st.info("No matching events found for gap analysis. This athlete's events may not match standard event names.")
 
 
 def show_road_to_la(df, course_type='all'):
