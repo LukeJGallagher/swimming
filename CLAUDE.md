@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Swimming performance analysis system for Team Saudi. Scrapes World Aquatics API for competition results (2000-2026), extracts split times, and provides evidence-based coaching analytics. Built for performance analysts tracking Saudi swimmers against international competition.
+Swimming performance analysis system for Team Saudi. Scrapes World Aquatics API for competition results (2000-2026), stores data in Azure Blob Storage as Parquet, and provides evidence-based coaching analytics with DuckDB queries.
 
 ## Common Commands
 
@@ -12,104 +12,123 @@ Swimming performance analysis system for Team Saudi. Scrapes World Aquatics API 
 # Install dependencies
 pip install -r requirements.txt
 
-# Run the scraper
-python enhanced_swimming_scraper.py
+# Run the scraper (saves to Azure Blob)
+python scraper_swimming.py                # Scrape current year
+python scraper_swimming.py --year 2024    # Scrape specific year
+python scraper_swimming.py --migrate      # Migrate local CSVs to Azure
 
-# Launch coaching dashboard (recommended)
+# Launch coaching dashboard
 streamlit run coaching_dashboard.py
 
-# Launch basic dashboard
-streamlit run dashboard.py
+# Test Azure connection
+python blob_storage.py
 
 # Run tests
 python test_scraper.py
-
-# Quick demo of coaching analytics
-python coaching_analytics.py
 ```
 
 ## Architecture
 
-### Data Collection Layer
+### Data Storage Layer (Azure Blob + DuckDB)
 
-- **enhanced_swimming_scraper.py** - Main data collection module
-  - `WorldAquaticsAPI` - API client with rate limiting (1.5s between requests)
-  - `SplitTimeAnalyzer` - Parses split times, calculates lap times and pacing metrics
-  - `EnhancedSwimmingScraper` - Orchestrates scraping by year/athlete
+- **blob_storage.py** - Azure Blob Storage with DuckDB queries
+  - `load_results()` - Load data from Azure (or local CSV fallback)
+  - `save_results()` - Save DataFrame to Azure as Parquet
+  - `query(sql)` - Execute SQL against data using DuckDB
+  - `get_athlete_results()`, `get_event_rankings()`, `get_yearly_summary()` - Convenience queries
+  - `migrate_csv_to_parquet()` - One-time migration from CSV to Azure
+  - `create_backup()` - Create timestamped backup before writes
+
+- **scraper_swimming.py** - GitHub Actions scraper
+  - `WorldAquaticsAPI` - API client with 1.5s rate limiting
+  - `SplitTimeAnalyzer` - Parse splits, calculate lap times, classify pacing
+  - Runs weekly via `.github/workflows/scraper.yml`
 
 ### Analytics Layer
 
-- **coaching_analytics.py** - Evidence-based coaching analytics (research-backed)
-  - `AdvancedPacingAnalyzer` - Classifies pacing strategies (U-shape, Inverted-J, Fast-start-even, Positive, Negative, Even)
-  - `TalentDevelopmentTracker` - Competition age, WR%, age progression, annual improvement
-  - `RaceRoundAnalyzer` - Heats-to-finals progression analysis
-  - `CompetitorIntelligence` - Tactical competitor profiling
-  - `WORLD_RECORDS_LCM` - Current world records for benchmarking
-  - `ELITE_BENCHMARKS` - Research-based thresholds (CV < 1.3%, 8 years to elite, etc.)
-
-- **performance_analyst_tools.py** - Basic analysis workflows
-  - `AthleteProfiler`, `ProgressionTracker`, `CompetitionAnalyzer`, `ReportGenerator`
-
-- **ai_enrichment.py** - AI-powered enrichment via OpenRouter free models
+- **coaching_analytics.py** - Research-backed coaching analytics
+  - `AdvancedPacingAnalyzer` - Pacing strategies (U-shape, Inverted-J, Even, Positive, Negative)
+  - `TalentDevelopmentTracker` - WR%, competition age, progression
+  - `RaceRoundAnalyzer` - Heats-to-finals improvement
+  - `CompetitorIntelligence` - Tactical profiling
+  - `WORLD_RECORDS_LCM`, `ELITE_BENCHMARKS` - Reference data
 
 ### Dashboard Layer
 
-- **coaching_dashboard.py** - Elite coaching dashboard with Team Saudi branding
-  - Talent development tracking, pacing analysis, competitor intelligence, race preparation
-- **dashboard.py** - Basic Streamlit dashboard
+- **coaching_dashboard.py** - Main Streamlit dashboard with Team Saudi branding
+- **dashboard.py** - Basic dashboard
 
 ### Data Flow
 
 ```
-World Aquatics API → enhanced_swimming_scraper.py → Results_YYYY.csv / data/*.csv
-                                                              ↓
-                    coaching_analytics.py ← load_all_results()
-                                                              ↓
-                    coaching_dashboard.py → Interactive Analysis
+World Aquatics API → scraper_swimming.py → Azure Blob (master.parquet)
+                                                    ↓
+                     blob_storage.py ← load_results() / query()
+                                                    ↓
+                     coaching_dashboard.py → Interactive Analysis
 ```
 
-## Key Research-Based Metrics
+## Azure Blob Storage
 
-From peer-reviewed sports science (Frontiers, PLOS ONE):
+Data is stored in Azure Blob Storage, not in git. Configuration in `blob_storage.py`:
 
-| Metric | Elite Benchmark | Source |
-|--------|-----------------|--------|
-| Pacing CV (lap variance) | < 1.3% | World Championships 2017-2024 |
-| Years to elite (>900 FINA pts) | ~8 years | Career trajectory studies |
-| Peak age (male/female) | 24.2 / 22.5 years | PLOS ONE 2024 |
-| Heats-to-finals improvement | > 1.2% for medalists | Race analysis |
-| Final 100m position for medal | Top 3 | 90%+ correlation |
+```python
+CONTAINER_NAME = "swimming-data"
+MASTER_FILE = "master.parquet"
+STORAGE_ACCOUNT_URL = "https://worldaquatics.blob.core.windows.net/"
+```
 
-## Data Files
+Connection string in `.env`:
+```
+AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=...
+```
 
-Root directory:
-- `Results_YYYY.csv` - Annual results with splits (2000-2026)
+## DuckDB Queries
 
-Data directory (`data/`):
-- `enriched_Results_YYYY.csv` - AI-enriched historical data
-- `competitions_YYYY.csv` - Competition metadata
+```python
+from blob_storage import query, get_country_summary
 
-Key columns: `Time`, `FullName`, `NAT`, `Rank`, `discipline_name`, `splits_json`, `lap_times_json`, `pacing_type`, `lap_variance`, `year`
+# Custom SQL (table name is 'swimming')
+df = query("SELECT * FROM swimming WHERE NAT='KSA' ORDER BY year DESC")
+
+# Built-in helpers
+df = get_country_summary('KSA')
+```
+
+## Key Research Metrics
+
+| Metric | Elite Benchmark |
+|--------|-----------------|
+| Pacing CV (lap variance) | < 1.3% |
+| Years to elite (>900 FINA pts) | ~8 years |
+| Peak age (male/female) | 24.2 / 22.5 years |
+| Heats-to-finals improvement | > 1.2% for medalists |
 
 ## World Aquatics API
 
 Base URL: `https://api.worldaquatics.com/fina`
 
-Key endpoints:
-- `/competitions` - List competitions by date range
-- `/competitions/{id}/events` - Events in a competition
+Endpoints:
+- `/competitions` - List by date range
+- `/competitions/{id}/events` - Events in competition
 - `/events/{id}` - Detailed results with splits
 
 No API key required. Rate limit: 1.5s between requests.
 
-## Configuration
+## GitHub Actions
 
-- **config.py** - API keys from `.env`, swimming constants, Saudi athlete IDs
-- **.claude/** - Domain knowledge (agents, skills for swimming analysis)
+Weekly scraper runs via `.github/workflows/scraper.yml`. Requires `AZURE_STORAGE_CONNECTION_STRING` secret.
 
 ## Team Saudi Branding
 
-Use these colors for all dashboards:
-- Primary Teal: `#007167`
-- Gold Accent: `#a08e66`
-- Dark Teal: `#005a51`
+```python
+TEAL_PRIMARY = '#007167'
+GOLD_ACCENT = '#a08e66'
+TEAL_DARK = '#005a51'
+```
+
+## File Organization
+
+- **archive/** - Local CSV backups (not in git)
+- **data/** - Enriched data files
+- **.claude/** - Agent/skill definitions for Claude Code
