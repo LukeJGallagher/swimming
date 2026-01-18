@@ -91,3 +91,6 @@ Events_*.csv
 
 # Archive folder (local data backups)
 archive/
+
+# Local data cache
+.cache/

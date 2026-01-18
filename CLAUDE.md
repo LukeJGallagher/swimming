@@ -119,6 +119,24 @@ No API key required. Rate limit: 1.5s between requests.
 
 Weekly scraper runs via `.github/workflows/scraper.yml`. Requires `AZURE_STORAGE_CONNECTION_STRING` secret.
 
+Manual trigger with specific year:
+```bash
+gh workflow run scraper.yml -f year=2024
+```
+
+## Streamlit Cloud Deployment
+
+Dashboard deployed at: `swimming-sa.streamlit.app`
+
+**Secrets configuration** (Settings > Secrets):
+```toml
+AZURE_STORAGE_CONNECTION_STRING = 'DefaultEndpointsProtocol=https;AccountName=worldaquatics;AccountKey=...;EndpointSuffix=core.windows.net'
+```
+
+Use single quotes to avoid TOML parsing issues with `==` in AccountKey.
+
+The `blob_storage.py` module auto-detects Streamlit Cloud (checks `/mount/src`) and skips interactive browser auth.
+
 ## Team Saudi Branding
 
 ```python
@@ -131,4 +149,23 @@ TEAL_DARK = '#005a51'
 
 - **archive/** - Local CSV backups (not in git)
 - **data/** - Enriched data files
+- **.cache/** - Local parquet cache (speeds up dashboard load from 37s to 2s)
 - **.claude/** - Agent/skill definitions for Claude Code
+
+## Common Data Issues
+
+**Time column is string**: Use `time_to_seconds()` helper before numeric operations:
+```python
+def time_to_seconds(t):
+    if pd.isna(t): return None
+    t = str(t)
+    if ':' in t:
+        parts = t.split(':')
+        return float(parts[0]) * 60 + float(parts[1])
+    return float(t)
+```
+
+**Course type detection**: Short course (25m) pools indicated by `(25m)` in competition name:
+```python
+df['is_short_course'] = df['competition_name'].str.contains(r'\(25m\)', regex=True)
+```

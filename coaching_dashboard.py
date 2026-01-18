@@ -1976,7 +1976,17 @@ def show_pacing_analysis(df, course_type='all'):
 
                 with st.expander(f"{race_title} | {comp_info}", expanded=(idx == 0)):
                     try:
-                        lap_times = json.loads(row['lap_times_json'])
+                        # Validate lap_times_json before parsing
+                        lap_json = row.get('lap_times_json', '')
+                        if pd.isna(lap_json) or not lap_json or lap_json in ('', '[]', 'null', 'None'):
+                            st.info("No split data available for this race")
+                            continue
+
+                        lap_times = json.loads(lap_json)
+                        if not lap_times or len(lap_times) < 2:
+                            st.info("Insufficient split data for pacing analysis")
+                            continue
+
                         analysis = pacing_analyzer.classify_pacing_strategy(lap_times)
 
                         col1, col2, col3, col4 = st.columns(4)
