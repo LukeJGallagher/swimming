@@ -613,9 +613,24 @@ def show_road_to_nagoya(df, course_type='all'):
             with col2:
                 st.markdown("**Best Times by Event (Recent)**")
                 if 'Time' in recent_df.columns and 'discipline_name' in recent_df.columns:
-                    best_times = recent_df.groupby(['FullName', 'discipline_name'])['Time'].min().reset_index()
-                    best_times.columns = ['Athlete', 'Event', 'Best Time']
-                    st.dataframe(best_times.head(20), use_container_width=True, hide_index=True)
+                    # Get best time with competition info
+                    best_times_list = []
+                    for (athlete, event), group in recent_df.groupby(['FullName', 'discipline_name']):
+                        if group['Time'].notna().any():
+                            # Sort by time to get best
+                            sorted_group = group.sort_values('Time')
+                            best_row = sorted_group.iloc[0]
+                            comp_name = best_row.get('competition_name', '')[:25] if pd.notna(best_row.get('competition_name')) else ''
+                            year = best_row.get('year', '')
+                            best_times_list.append({
+                                'Athlete': athlete,
+                                'Event': event,
+                                'Best Time': best_row['Time'],
+                                'Competition': f"{comp_name} ({year})" if comp_name else str(year)
+                            })
+                    if best_times_list:
+                        best_times = pd.DataFrame(best_times_list)
+                        st.dataframe(best_times.head(20), use_container_width=True, hide_index=True)
 
             # Performance progression chart
             st.markdown("---")
@@ -708,12 +723,25 @@ def show_road_to_nagoya(df, course_type='all'):
                     st.plotly_chart(fig, use_container_width=True)
 
             with col2:
-                st.markdown("**Top FINA Points by Event**")
+                st.markdown("**Top FINA Points by Event (Top 50)**")
                 if 'Points' in recent_asian.columns and 'discipline_name' in recent_asian.columns:
-                    top_points = recent_asian.groupby('discipline_name')['Points'].max().reset_index()
-                    top_points = top_points.sort_values('Points', ascending=False).head(15)
-                    top_points.columns = ['Event', 'Best FINA Points']
-                    st.dataframe(top_points, use_container_width=True, hide_index=True)
+                    # Get top FINA points with athlete, time, and competition info
+                    top_points_list = []
+                    for event, group in recent_asian.groupby('discipline_name'):
+                        if group['Points'].notna().any():
+                            # Get top performer for this event
+                            best_row = group.loc[group['Points'].idxmax()]
+                            top_points_list.append({
+                                'Event': event,
+                                'Athlete': best_row.get('FullName', 'N/A'),
+                                'NAT': best_row.get('NAT', ''),
+                                'Time': best_row.get('Time', 'N/A'),
+                                'Points': int(best_row['Points']) if pd.notna(best_row['Points']) else 0
+                            })
+                    if top_points_list:
+                        top_points = pd.DataFrame(top_points_list)
+                        top_points = top_points.sort_values('Points', ascending=False).head(50)
+                        st.dataframe(top_points, use_container_width=True, hide_index=True)
 
             # Event-by-event analysis
             st.markdown("---")
@@ -1033,13 +1061,15 @@ def show_road_to_la(df, course_type='all'):
                             status = "🌟 Olympic Level" if pct >= 90 else (
                                 "📈 Approaching" if pct >= 85 else "🎯 Developing"
                             )
+                            time_display = wr.get('time', 'N/A')
+                            comp_info = wr.get('competition', '')[:30] if wr.get('competition') else ''
 
                             st.markdown(f"""
                             <div style="display: flex; justify-content: space-between; padding: 0.5rem;
                                         background: #f8f9fa; border-radius: 4px; margin-bottom: 0.5rem;
                                         border-left: 4px solid {color};">
-                                <span><strong>{wr['event']}</strong></span>
-                                <span>{wr['best_time']} ({pct:.1f}% WR) {status}</span>
+                                <span><strong>{wr['event']}</strong> <small style="color: #666;">{comp_info}</small></span>
+                                <span>{time_display} ({pct:.1f}% WR) {status}</span>
                             </div>
                             """, unsafe_allow_html=True)
 
