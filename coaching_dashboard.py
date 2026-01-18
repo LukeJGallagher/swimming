@@ -10,6 +10,13 @@ Features:
 - Competitor Intelligence
 """
 
+# Load environment variables first
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 try:
     import streamlit as st
 except ImportError:
@@ -126,10 +133,33 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 
-@st.cache_data
+@st.cache_data(ttl=3600, show_spinner="Loading swimming data...")
 def load_data():
-    """Load all available swimming data."""
-    return load_all_results()
+    """Load all available swimming data. Cached for 1 hour."""
+    import pandas as pd
+    from pathlib import Path
+    import os
+
+    # Get the directory where this script is located
+    script_dir = Path(__file__).parent.resolve()
+
+    # Try local cache first (fastest) - use absolute path
+    cache_file = script_dir / ".cache" / "swimming_data.parquet"
+    if cache_file.exists():
+        try:
+            df = pd.read_parquet(cache_file)
+            if not df.empty:
+                return df
+        except Exception as e:
+            st.warning(f"Cache read failed: {e}")
+
+    # Change to script directory before loading
+    original_dir = os.getcwd()
+    try:
+        os.chdir(script_dir)
+        return load_all_results()
+    finally:
+        os.chdir(original_dir)
 
 
 def create_team_saudi_chart_theme():
@@ -694,9 +724,27 @@ def show_road_to_nagoya(df, course_type='all'):
 
                 # Top performers
                 if 'Time' in event_df.columns:
-                    top_performers = event_df.nsmallest(10, 'Time')[['FullName', 'NAT', 'Time', 'competition_name', 'year']].copy()
-                    top_performers.columns = ['Athlete', 'Nation', 'Time', 'Competition', 'Year']
-                    st.dataframe(top_performers, use_container_width=True, hide_index=True)
+                    # Convert Time to numeric for sorting (handle MM:SS.ss format)
+                    def time_to_seconds(t):
+                        if pd.isna(t):
+                            return float('inf')
+                        try:
+                            t = str(t)
+                            if ':' in t:
+                                parts = t.split(':')
+                                return float(parts[0]) * 60 + float(parts[1])
+                            return float(t)
+                        except:
+                            return float('inf')
+
+                    event_df_sorted = event_df.copy()
+                    event_df_sorted['time_numeric'] = event_df_sorted['Time'].apply(time_to_seconds)
+                    event_df_sorted = event_df_sorted[event_df_sorted['time_numeric'] < float('inf')]
+
+                    if not event_df_sorted.empty:
+                        top_performers = event_df_sorted.nsmallest(10, 'time_numeric')[['FullName', 'NAT', 'Time', 'competition_name', 'year']].copy()
+                        top_performers.columns = ['Athlete', 'Nation', 'Time', 'Competition', 'Year']
+                        st.dataframe(top_performers, use_container_width=True, hide_index=True)
 
     with tab3:
         st.subheader("Qualification Standards")
