@@ -1955,7 +1955,13 @@ def show_pacing_analysis(df, course_type='all'):
         if selected_athlete and selected_athlete != "No athletes found":
             athlete_splits = with_splits[
                 with_splits['FullName'].str.contains(selected_athlete, case=False, na=False)
-            ]
+            ].copy()
+
+            # Remove duplicate races (same competition, event, time, year)
+            dedup_cols = ['competition_name', 'discipline_name', 'Time', 'year']
+            available_dedup_cols = [c for c in dedup_cols if c in athlete_splits.columns]
+            if available_dedup_cols:
+                athlete_splits = athlete_splits.drop_duplicates(subset=available_dedup_cols, keep='first')
 
             # Event filter for this athlete
             athlete_events = sorted(athlete_splits['discipline_name'].dropna().unique())
@@ -2161,6 +2167,12 @@ def show_competition_intel(df, course_type='all'):
                     event_races = athlete_data[athlete_data['discipline_name'] == event_name].copy()
                     if event_races.empty:
                         continue
+
+                    # Remove duplicate races (same competition, time, year)
+                    dedup_cols = ['competition_name', 'Time', 'year']
+                    available_dedup = [c for c in dedup_cols if c in event_races.columns]
+                    if available_dedup:
+                        event_races = event_races.drop_duplicates(subset=available_dedup, keep='first')
 
                     # Convert times
                     from enhanced_swimming_scraper import SplitTimeAnalyzer
