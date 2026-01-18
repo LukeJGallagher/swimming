@@ -2963,115 +2963,151 @@ def show_performance_benchmarks(df, course_type='all'):
         st.subheader("What It Takes to Win - By Competition Level")
 
         st.markdown("""
-        Performance thresholds shown as **% of World Record** required to achieve each goal.
-        These benchmarks are based on historical analysis of medal-winning performances.
+        **Actual times** required to medal at different competition levels.
+        Select an event to see specific target times based on World Records.
         """)
 
-        # Competition level comparison chart
-        comp_data = []
-        for comp, benchmarks in COMPETITION_BENCHMARKS.items():
-            comp_data.append({
-                'Competition': comp,
-                'Gold': benchmarks['gold'],
-                'Medal': benchmarks['medal'],
-                'Finals': benchmarks['final'],
-                'Level': benchmarks['level']
-            })
+        # Event selection
+        col_gender, col_event = st.columns(2)
 
-        comp_df = pd.DataFrame(comp_data)
+        # Get world records based on course type
+        wr_dict = get_world_records(course_type)
 
-        # Grouped bar chart
-        fig = go.Figure()
+        with col_gender:
+            gender = st.selectbox("Gender", ["Men", "Women"], key="benchmark_gender")
 
-        fig.add_trace(go.Bar(
-            name='Gold Medal',
-            x=comp_df['Competition'],
-            y=comp_df['Gold'],
-            marker_color='#FFD700',
-            text=[f"{v}%" for v in comp_df['Gold']],
-            textposition='outside'
-        ))
-        fig.add_trace(go.Bar(
-            name='Any Medal',
-            x=comp_df['Competition'],
-            y=comp_df['Medal'],
-            marker_color='#C0C0C0',
-            text=[f"{v}%" for v in comp_df['Medal']],
-            textposition='outside'
-        ))
-        fig.add_trace(go.Bar(
-            name='Make Finals',
-            x=comp_df['Competition'],
-            y=comp_df['Finals'],
-            marker_color='#CD7F32',
-            text=[f"{v}%" for v in comp_df['Finals']],
-            textposition='outside'
-        ))
+        # Filter events by gender
+        gender_events = [e for e in wr_dict.keys() if e.startswith(gender)]
+        event_display = [e.replace(f"{gender} ", "") for e in gender_events]
 
-        fig.update_layout(
-            barmode='group',
-            title="WR% Required by Competition Level",
-            yaxis_title="% of World Record",
-            xaxis_title="Competition",
-            yaxis=dict(range=[75, 100]),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02),
-            **create_team_saudi_chart_theme()
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        with col_event:
+            selected_event_display = st.selectbox("Select Event", event_display, key="benchmark_event")
 
-        # Detailed table
-        st.markdown("### Detailed Competition Standards")
+        selected_event = f"{gender} {selected_event_display}"
 
-        col1, col2 = st.columns(2)
+        # Get world record time
+        wr_time = wr_dict.get(selected_event)
 
-        with col1:
-            st.markdown("#### Elite Level Competitions")
-            for comp in ['Olympic Games', 'World Championships', 'World Junior Championships']:
-                benchmarks = COMPETITION_BENCHMARKS[comp]
-                with st.expander(f"**{comp}** ({benchmarks['level']})"):
-                    st.markdown(f"*{benchmarks['description']}*")
-                    st.metric("Gold Standard", f"{benchmarks['gold']}% WR")
-                    st.metric("Medal Standard", f"{benchmarks['medal']}% WR")
-                    st.metric("Finals Standard", f"{benchmarks['final']}% WR")
+        if wr_time:
+            # Helper to format seconds to time string
+            def seconds_to_time(secs):
+                if secs >= 60:
+                    mins = int(secs // 60)
+                    remaining = secs % 60
+                    return f"{mins}:{remaining:05.2f}"
+                return f"{secs:.2f}"
 
-        with col2:
-            st.markdown("#### Continental & Regional Competitions")
-            for comp in ['Asian Games', 'Asian Championships', 'GCC Championships', 'Arab Championships']:
-                benchmarks = COMPETITION_BENCHMARKS[comp]
-                with st.expander(f"**{comp}** ({benchmarks['level']})"):
-                    st.markdown(f"*{benchmarks['description']}*")
-                    st.metric("Gold Standard", f"{benchmarks['gold']}% WR")
-                    st.metric("Medal Standard", f"{benchmarks['medal']}% WR")
-                    st.metric("Finals Standard", f"{benchmarks['final']}% WR")
+            # Calculate target times for each competition level
+            st.markdown(f"### {selected_event}")
+            st.info(f"**World Record: {seconds_to_time(wr_time)}**")
 
-        # Gap analysis visualization
-        st.markdown("---")
-        st.markdown("### Competition Level Progression Pathway")
+            # Build target times table
+            competitions = ['Olympic Games', 'World Championships', 'Asian Games', 'Asian Championships', 'GCC Championships', 'Arab Championships']
+            target_data = []
 
-        pathway_fig = go.Figure()
+            for comp in competitions:
+                benchmarks = COMPETITION_BENCHMARKS.get(comp, {})
+                if benchmarks:
+                    gold_pct = benchmarks.get('gold', 98) / 100
+                    medal_pct = benchmarks.get('medal', 97) / 100
+                    final_pct = benchmarks.get('final', 95) / 100
 
-        levels = ['GCC', 'Arab', 'National', 'Asian Champs', 'Asian Games', 'World Juniors', 'Worlds', 'Olympics']
-        gold_values = [88, 90, 92, 95, 96, 94, 98, 98.5]
+                    gold_time = wr_time / gold_pct
+                    medal_time = wr_time / medal_pct
+                    final_time = wr_time / final_pct
 
-        pathway_fig.add_trace(go.Scatter(
-            x=levels,
-            y=gold_values,
-            mode='lines+markers+text',
-            text=[f"{v}%" for v in gold_values],
-            textposition='top center',
-            line=dict(color=TEAM_SAUDI_COLORS['gold_accent'], width=4),
-            marker=dict(size=15, color=TEAM_SAUDI_COLORS['primary_teal']),
-            name='Gold Standard'
-        ))
+                    target_data.append({
+                        'Competition': comp,
+                        'Gold': seconds_to_time(gold_time),
+                        'Medal': seconds_to_time(medal_time),
+                        'Finals': seconds_to_time(final_time),
+                        'Gold_sec': gold_time,
+                        'Medal_sec': medal_time,
+                        'Finals_sec': final_time
+                    })
 
-        pathway_fig.update_layout(
-            title="Progression Pathway - Gold Medal Standards",
-            xaxis_title="Competition Level",
-            yaxis_title="% of World Record Required",
-            yaxis=dict(range=[85, 100]),
-            **create_team_saudi_chart_theme()
-        )
-        st.plotly_chart(pathway_fig, use_container_width=True)
+            target_df = pd.DataFrame(target_data)
+
+            # Display as formatted table
+            st.markdown("### Target Times by Competition")
+            display_df = target_df[['Competition', 'Gold', 'Medal', 'Finals']].copy()
+            display_df.columns = ['Competition', '🥇 Gold', '🥈🥉 Medal', '🏊 Finals']
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+            # Bar chart showing actual times (in seconds)
+            fig = go.Figure()
+
+            fig.add_trace(go.Bar(
+                name='🥇 Gold',
+                x=target_df['Competition'],
+                y=target_df['Gold_sec'],
+                marker_color='#FFD700',
+                text=target_df['Gold'],
+                textposition='outside'
+            ))
+            fig.add_trace(go.Bar(
+                name='🥈🥉 Medal',
+                x=target_df['Competition'],
+                y=target_df['Medal_sec'],
+                marker_color='#C0C0C0',
+                text=target_df['Medal'],
+                textposition='outside'
+            ))
+            fig.add_trace(go.Bar(
+                name='🏊 Finals',
+                x=target_df['Competition'],
+                y=target_df['Finals_sec'],
+                marker_color='#CD7F32',
+                text=target_df['Finals'],
+                textposition='outside'
+            ))
+
+            # Add World Record line
+            fig.add_hline(y=wr_time, line_dash="dash", line_color=TEAM_SAUDI_COLORS['primary_teal'],
+                         annotation_text=f"WR: {seconds_to_time(wr_time)}", annotation_position="right")
+
+            fig.update_layout(
+                barmode='group',
+                title=f"Target Times for {selected_event}",
+                yaxis_title="Time (seconds)",
+                xaxis_title="Competition",
+                legend=dict(orientation="h", yanchor="bottom", y=1.02),
+                **create_team_saudi_chart_theme()
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+            # Quick reference cards
+            st.markdown("### Quick Reference - Key Targets")
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                st.markdown(f"""
+                <div style="background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%); padding: 1rem; border-radius: 8px; text-align: center;">
+                    <p style="color: #333; margin: 0; font-size: 0.9rem;">🥇 Olympic/World Gold</p>
+                    <p style="color: #333; margin: 0.5rem 0 0 0; font-size: 1.8rem; font-weight: bold;">{target_data[0]['Gold']}</p>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with col2:
+                asian_gold = next((t['Gold'] for t in target_data if t['Competition'] == 'Asian Games'), 'N/A')
+                st.markdown(f"""
+                <div style="background: linear-gradient(135deg, {TEAM_SAUDI_COLORS['primary_teal']} 0%, {TEAM_SAUDI_COLORS['dark_teal']} 100%); padding: 1rem; border-radius: 8px; text-align: center;">
+                    <p style="color: white; margin: 0; font-size: 0.9rem;">🥇 Asian Games Gold</p>
+                    <p style="color: {TEAM_SAUDI_COLORS['gold_accent']}; margin: 0.5rem 0 0 0; font-size: 1.8rem; font-weight: bold;">{asian_gold}</p>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with col3:
+                gcc_gold = next((t['Gold'] for t in target_data if t['Competition'] == 'GCC Championships'), 'N/A')
+                st.markdown(f"""
+                <div style="background: linear-gradient(135deg, #6c757d 0%, #495057 100%); padding: 1rem; border-radius: 8px; text-align: center;">
+                    <p style="color: white; margin: 0; font-size: 0.9rem;">🥇 GCC Gold</p>
+                    <p style="color: white; margin: 0.5rem 0 0 0; font-size: 1.8rem; font-weight: bold;">{gcc_gold}</p>
+                </div>
+                """, unsafe_allow_html=True)
+
+        else:
+            st.warning(f"World Record not available for {selected_event}")
 
     with tab2:
         st.subheader("Age-Based Progression Targets")
