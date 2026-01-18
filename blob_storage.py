@@ -79,15 +79,26 @@ def _get_connection_string() -> Optional[str]:
 
     # Try environment variable first
     _CONN_STRING = os.getenv('AZURE_STORAGE_CONNECTION_STRING')
+    if _CONN_STRING:
+        print("Found connection string in environment variable")
+        return _CONN_STRING
 
     # Try Streamlit secrets if not in environment
-    if not _CONN_STRING:
-        try:
-            import streamlit as st
-            if hasattr(st, 'secrets') and 'AZURE_STORAGE_CONNECTION_STRING' in st.secrets:
+    try:
+        import streamlit as st
+        if hasattr(st, 'secrets'):
+            if 'AZURE_STORAGE_CONNECTION_STRING' in st.secrets:
                 _CONN_STRING = st.secrets['AZURE_STORAGE_CONNECTION_STRING']
-        except (ImportError, FileNotFoundError, KeyError, AttributeError):
-            pass
+                print("Found connection string in Streamlit secrets")
+            else:
+                print(f"Streamlit secrets available but AZURE_STORAGE_CONNECTION_STRING not found")
+                print(f"Available secrets: {list(st.secrets.keys()) if hasattr(st.secrets, 'keys') else 'unknown'}")
+    except ImportError:
+        print("Streamlit not installed")
+    except FileNotFoundError:
+        print("No Streamlit secrets file found")
+    except Exception as e:
+        print(f"Error reading Streamlit secrets: {e}")
 
     return _CONN_STRING
 
@@ -118,11 +129,11 @@ def _use_azure() -> bool:
     """Check if Azure Blob Storage should be used."""
     if os.getenv('FORCE_LOCAL_DATA', '').lower() in ('true', '1', 'yes'):
         return False
-    # Can use Azure with connection string, SAS token, OR AAD authentication
+    # Only use Azure if we have explicit credentials (connection string or SAS token)
+    # Don't rely on AAD in headless environments like Streamlit Cloud
     has_conn_string = bool(_get_connection_string())
     has_sas_token = bool(_get_sas_token())
-    has_aad = AZURE_IDENTITY_AVAILABLE and AZURE_AVAILABLE
-    return (has_conn_string or has_sas_token or has_aad) and AZURE_AVAILABLE
+    return (has_conn_string or has_sas_token) and AZURE_AVAILABLE
 
 
 def get_connection_mode() -> str:
@@ -138,24 +149,42 @@ def get_connection_mode() -> str:
     return 'local_csv'
 
 
+def _is_headless_environment() -> bool:
+    """Check if running in a headless environment (CI, Streamlit Cloud, etc.)."""
+    # Check for common CI/CD environment variables
+    if os.getenv('CI') or os.getenv('GITHUB_ACTIONS'):
+        return True
+    # Check for Streamlit Cloud (runs in /mount/src/)
+    if os.path.exists('/mount/src'):
+        return True
+    # Check for common headless indicators
+    if os.getenv('STREAMLIT_SERVER_HEADLESS'):
+        return True
+    return False
+
+
 def get_blob_service() -> Optional['BlobServiceClient']:
     """Get Azure Blob Service client.
 
     Supports authentication methods in order:
-    1. Connection string (for GitHub Actions / automated pipelines)
+    1. Connection string (for GitHub Actions / Streamlit Cloud / automated pipelines)
     2. SAS token (simple, time-limited access)
     3. Service Principal env vars (AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID)
-    4. Interactive browser broker (Windows native auth - for local dev)
-    5. Interactive browser (opens browser to sign in - for local dev)
+    4. Interactive browser broker (Windows native auth - for local dev only)
+    5. Interactive browser (opens browser to sign in - for local dev only)
     """
     if not AZURE_AVAILABLE:
         return None
 
-    # Method 1: Connection string (best for GitHub Actions)
+    # Method 1: Connection string (best for GitHub Actions / Streamlit Cloud)
     conn_str = _get_connection_string()
     if conn_str and conn_str != "PASTE_YOUR_CONNECTION_STRING_HERE":
-        print("Authenticating via connection string")
-        return BlobServiceClient.from_connection_string(conn_str)
+        try:
+            print("Authenticating via connection string")
+            return BlobServiceClient.from_connection_string(conn_str)
+        except Exception as e:
+            print(f"Connection string auth failed: {e}")
+            return None
 
     # Method 2: SAS token (simple, no RBAC required)
     sas_token = _get_sas_token()
@@ -166,7 +195,7 @@ def get_blob_service() -> Optional['BlobServiceClient']:
         print("Authenticating via SAS token")
         return BlobServiceClient(account_url=account_url_with_sas)
 
-    # Method 2: Service Principal (for GitHub Actions with OIDC or secrets)
+    # Method 3: Service Principal (for GitHub Actions with OIDC or secrets)
     # DefaultAzureCredential will pick up AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID
     if os.getenv('AZURE_CLIENT_ID') and os.getenv('AZURE_TENANT_ID'):
         try:
@@ -179,10 +208,11 @@ def get_blob_service() -> Optional['BlobServiceClient']:
         except Exception as e:
             print(f"Service Principal auth failed: {e}")
 
-    # Method 3 & 4: Interactive auth (for local development only)
-    # Skip if running in CI/CD environment
-    if os.getenv('CI') or os.getenv('GITHUB_ACTIONS'):
-        print("Running in CI - interactive auth not available")
+    # Method 4 & 5: Interactive auth (for local development only)
+    # Skip if running in headless environment (CI, Streamlit Cloud, etc.)
+    if _is_headless_environment():
+        print("Running in headless environment - interactive auth not available")
+        print("Please configure AZURE_STORAGE_CONNECTION_STRING in secrets")
         return None
 
     if AZURE_IDENTITY_AVAILABLE:
@@ -313,15 +343,48 @@ def create_backup() -> Optional[str]:
         return None
 
 
-def load_results() -> pd.DataFrame:
-    """Load swimming results from Azure Blob or local CSV."""
+LOCAL_CACHE_FILE = ".cache/swimming_data.parquet"
+CACHE_MAX_AGE_HOURS = 24  # Refresh cache after 24 hours
 
-    # Try Azure Blob first
+
+def load_results(use_cache: bool = True) -> pd.DataFrame:
+    """Load swimming results from local cache, Azure Blob, or CSV.
+
+    Args:
+        use_cache: If True, use local cache file if fresh (default: True)
+    """
+    from pathlib import Path
+    import time
+
+    cache_path = Path(LOCAL_CACHE_FILE)
+
+    # Check local cache first (much faster than Azure download)
+    if use_cache and cache_path.exists():
+        cache_age_hours = (time.time() - cache_path.stat().st_mtime) / 3600
+        if cache_age_hours < CACHE_MAX_AGE_HOURS:
+            try:
+                print(f"Loading from local cache (age: {cache_age_hours:.1f}h)...")
+                df = pd.read_parquet(cache_path)
+                print(f"Loaded {len(df):,} results from cache")
+                return df
+            except Exception as e:
+                print(f"Cache read failed: {e}")
+
+    # Try Azure Blob
     if _use_azure():
         print("Loading data from Azure Blob Storage...")
         df = download_parquet(MASTER_FILE)
         if df is not None and not df.empty:
             print(f"Loaded {len(df):,} results from Azure Blob")
+
+            # Save to local cache for faster future loads
+            try:
+                cache_path.parent.mkdir(exist_ok=True)
+                df.to_parquet(cache_path, index=False)
+                print(f"Saved to local cache: {cache_path}")
+            except Exception as e:
+                print(f"Cache write failed: {e}")
+
             return df
         print("Azure Blob empty or failed, falling back to local...")
 
