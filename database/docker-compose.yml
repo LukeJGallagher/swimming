@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: swimming_db
+    environment:
+      POSTGRES_DB: swimming_performance
+      POSTGRES_USER: swimming_admin
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-swimming_secret}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U swimming_admin -d swimming_performance"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # pgAdmin for database management (optional)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: swimming_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@teamsaudi.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+    ports:
+      - "8080:80"
+    depends_on:
+      - db
+    profiles:
+      - admin
+
+  # Streamlit Dashboard
+  dashboard:
+    build:
+      context: ..
+      dockerfile: database/Dockerfile
+    container_name: swimming_dashboard
+    environment:
+      DATABASE_URL: postgresql://swimming_admin:${DB_PASSWORD:-swimming_secret}@db:5432/swimming_performance
+    ports:
+      - "8501:8501"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ../:/app
+    command: streamlit run coaching_dashboard.py --server.address 0.0.0.0
+
+volumes:
+  postgres_data:

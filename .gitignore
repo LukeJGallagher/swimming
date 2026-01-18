@@ -1,0 +1,93 @@
+# Environment variables and secrets - NEVER COMMIT
+.env
+.env.local
+.env.*.local
+*.env
+
+# Streamlit secrets (NEVER COMMIT)
+.streamlit/secrets.toml
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Local database files
+*.db
+*.sqlite
+*.sqlite3
+swimming_performance.db
+
+# Logs
+*.log
+swimming_scraper.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+nul
+
+# Claude/AI
+.claude/settings.local.json
+
+# Sync state (local only)
+.sync_state.json
+
+# GitHub Actions local testing
+.act/
+
+# Large data files - DO NOT COMMIT (data is in Azure SQL)
+*.csv
+data/*.csv
+enriched_*.csv
+Results_*.csv
+All_*.csv
+Annual_*.csv
+Events_*.csv
+
+# Backup files
+*.bak
+*_backup.*
+
+# Deployment artifacts
+.deployment/
+
+# Archive folder (local data backups)
+archive/

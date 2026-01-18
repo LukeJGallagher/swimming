@@ -1,0 +1,125 @@
+name: Build Swimming Database
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Results_*.csv'
+      - 'database/**'
+  workflow_dispatch:
+
+jobs:
+  build-database:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+
+      - name: Install dependencies
+        run: |
+          pip install pandas sqlalchemy
+
+      - name: Create SQLite database
+        run: |
+          cd database
+          python -c "
+          import sys
+          sys.path.insert(0, '..')
+          from database.models import create_database, get_session, initialize_reference_data
+          from database.import_csv import import_all_csv_files
+
+          print('Creating database...')
+          engine = create_database('sqlite:///swimming_performance.db')
+          session = get_session(engine)
+          initialize_reference_data(session)
+
+          print('Importing CSV files...')
+          stats = import_all_csv_files('..', session)
+
+          print(f'Import complete: {stats}')
+          session.close()
+          "
+
+      - name: Verify database
+        run: |
+          cd database
+          python -c "
+          from sqlalchemy import create_engine, text
+
+          engine = create_engine('sqlite:///swimming_performance.db')
+          with engine.connect() as conn:
+              athletes = conn.execute(text('SELECT COUNT(*) FROM athletes')).scalar()
+              results = conn.execute(text('SELECT COUNT(*) FROM results')).scalar()
+              print(f'Athletes: {athletes:,}')
+              print(f'Results: {results:,}')
+          "
+
+      - name: Upload database artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: swimming-performance-db
+          path: database/swimming_performance.db
+          retention-days: 30
+
+  test-queries:
+    needs: build-database
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download database
+        uses: actions/download-artifact@v4
+        with:
+          name: swimming-performance-db
+          path: database
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pandas sqlalchemy
+
+      - name: Run query tests
+        run: |
+          cd database
+          python -c "
+          import sys
+          sys.path.insert(0, '..')
+          from database.models import get_session
+          from database.queries import SwimmingQueries
+          from sqlalchemy import create_engine
+
+          engine = create_engine('sqlite:///swimming_performance.db')
+          from sqlalchemy.orm import sessionmaker
+          Session = sessionmaker(bind=engine)
+          session = Session()
+
+          q = SwimmingQueries(session)
+
+          print('Testing queries...')
+          stats = q.get_database_stats()
+          print(f'Database stats: {stats}')
+
+          rankings = q.get_event_rankings('100m Freestyle', limit=5)
+          print(f'Top 5 in 100m Free: {rankings}')
+
+          print('All tests passed!')
+          "

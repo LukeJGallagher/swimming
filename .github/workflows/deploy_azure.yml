@@ -1,0 +1,191 @@
+name: Deploy to Azure SQL
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Results_*.csv'
+      - 'database/**'
+      - 'enhanced_swimming_scraper.py'
+  schedule:
+    # Run weekly on Monday at 6 AM UTC (9 AM Saudi time)
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      scrape_years:
+        description: 'Years to scrape (comma-separated, e.g., 2024,2025,2026)'
+        required: false
+        default: '2026'
+      full_sync:
+        description: 'Run full database sync (all CSV files)'
+        type: boolean
+        default: false
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  scrape-and-sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyodbc sqlalchemy
+
+      - name: Install ODBC Driver for SQL Server
+        run: |
+          curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
+          curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
+          sudo apt-get update
+          sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18
+          sudo apt-get install -y unixodbc-dev
+
+      - name: Scrape latest data
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        env:
+          AZURE_SQL_CONN: ${{ secrets.AZURE_SQL_CONN }}
+        run: |
+          YEARS="${{ github.event.inputs.scrape_years || '2026' }}"
+          echo "Scraping data for years: $YEARS"
+
+          # Run the scraper for each year
+          IFS=',' read -ra YEAR_ARRAY <<< "$YEARS"
+          for year in "${YEAR_ARRAY[@]}"; do
+            echo "Scraping year: $year"
+            python enhanced_swimming_scraper.py --year $year --output Results_${year}.csv
+          done
+
+      - name: Sync data to Azure SQL
+        env:
+          AZURE_SQL_CONN: ${{ secrets.AZURE_SQL_CONN }}
+        run: |
+          python -c "
+          import os
+          import sys
+          sys.path.insert(0, '.')
+
+          from database.models import create_database, get_session, initialize_reference_data
+          from database.import_csv import import_all_csv_files, sync_new_data
+
+          print('Connecting to Azure SQL...')
+          engine = create_database()
+          session = get_session(engine)
+
+          # Initialize reference data (world records, benchmarks)
+          print('Initializing reference data...')
+          initialize_reference_data(session)
+
+          # Check if full sync requested
+          full_sync = '${{ github.event.inputs.full_sync }}' == 'true'
+
+          if full_sync:
+              print('Running full database sync...')
+              stats = import_all_csv_files('.', session)
+              print(f'Full sync complete: {stats}')
+          else:
+              # Sync only new/updated CSV files
+              import glob
+              csv_files = sorted(glob.glob('Results_*.csv'))
+
+              for csv_file in csv_files:
+                  print(f'Syncing {csv_file}...')
+                  stats = sync_new_data(csv_file, session)
+                  print(f'  Imported: {stats.get(\"imported\", 0)} new records')
+
+          session.close()
+          print('Sync complete!')
+          "
+
+      - name: Verify database
+        env:
+          AZURE_SQL_CONN: ${{ secrets.AZURE_SQL_CONN }}
+        run: |
+          python -c "
+          import os
+          from sqlalchemy import create_engine, text
+          from database.models import get_database_url
+
+          engine = create_engine(get_database_url())
+
+          with engine.connect() as conn:
+              athletes = conn.execute(text('SELECT COUNT(*) FROM athletes')).scalar()
+              results = conn.execute(text('SELECT COUNT(*) FROM results')).scalar()
+              competitions = conn.execute(text('SELECT COUNT(*) FROM competitions')).scalar()
+
+              print('=== Database Statistics ===')
+              print(f'Athletes:     {athletes:,}')
+              print(f'Results:      {results:,}')
+              print(f'Competitions: {competitions:,}')
+          "
+
+      - name: Commit updated CSV files
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+          # Check if there are changes to commit
+          if [[ -n $(git status --porcelain Results_*.csv) ]]; then
+            git add Results_*.csv
+            git commit -m "Auto-update: Scraped swimming results $(date +'%Y-%m-%d')"
+            git push
+          else
+            echo "No changes to commit"
+          fi
+
+  notify-on-failure:
+    needs: scrape-and-sync
+    runs-on: ubuntu-latest
+    if: failure()
+
+    steps:
+      - name: Create issue on failure
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = `Automated scrape failed - ${new Date().toISOString().split('T')[0]}`;
+            const body = `The automated swimming data scrape and sync workflow failed.
+
+            **Workflow Run:** [View Details](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+            Please check the logs for more information.`;
+
+            // Check for existing open issue
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'automated-scrape-failure'
+            });
+
+            if (issues.data.length === 0) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: title,
+                body: body,
+                labels: ['automated-scrape-failure', 'bug']
+              });
+            }

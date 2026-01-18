@@ -1,0 +1,36 @@
+# Core data processing
+pandas>=2.0.0
+numpy>=1.24.0
+
+# API and web requests
+requests>=2.31.0
+
+# Progress bars
+tqdm>=4.65.0
+
+# Environment variables
+python-dotenv>=1.0.0
+
+# Streamlit Dashboard
+streamlit>=1.28.0
+plotly>=5.18.0
+
+# Optional: AI/ML enrichment
+openai>=1.0.0  # For OpenRouter API compatibility
+
+# Data visualization
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Data export formats
+openpyxl>=3.1.0  # Excel support
+pyarrow>=12.0.0  # Parquet support
+
+# Database support
+sqlalchemy>=2.0.0
+
+# Azure Blob Storage (for cloud deployment)
+azure-storage-blob>=12.19.0
+azure-identity>=1.15.0  # For AAD authentication (enterprise accounts)
+duckdb>=0.9.0
+pyarrow>=14.0.0
