@@ -314,7 +314,7 @@ def format_time(seconds: float) -> str:
         mins = int(seconds // 60)
         secs = seconds % 60
         return f"{mins}:{secs:05.2f}"
-    return f"{secs:.2f}"
+    return f"{seconds:.2f}"
 
 
 # =============================================================================
