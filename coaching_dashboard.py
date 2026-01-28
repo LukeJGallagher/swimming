@@ -786,10 +786,15 @@ def show_road_to_nagoya(df, course_type='all'):
     with tab3:
         st.subheader("Official Entry Standards Comparison")
 
+        # Show warning if viewing short course data
+        if course_type == 'scm':
+            st.warning("⚠️ **Note:** Olympic Games, World Championships, and Asian Games are all **Long Course (50m pool)** competitions. The entry standards below apply to Long Course times only. Short course times cannot be directly compared to these standards.")
+            st.markdown("---")
+
         st.markdown("""
         <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px; border-left: 4px solid #007167;">
             <strong>What It Takes to Compete:</strong> Compare entry standards across major competitions.
-            Times are based on historical data and estimated qualification standards.
+            All major championships (Olympics, Worlds, Asian Games) are held in 50m pools (Long Course).
         </div>
         """, unsafe_allow_html=True)
 
@@ -927,6 +932,10 @@ def show_road_to_nagoya(df, course_type='all'):
 
     with tab4:
         st.subheader("Target Times & Gap Analysis")
+
+        # Show warning if viewing short course data
+        if course_type == 'scm':
+            st.warning("⚠️ **Note:** Entry standards below are for Long Course (50m pool) competitions. Short course times cannot be directly compared to these standards.")
 
         st.markdown("""
         Analyze an athlete's current times vs. entry standards for major competitions.
